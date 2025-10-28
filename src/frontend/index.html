@@ -1,1 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OctoMatch — Smart Team & Bracket Organizer</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <div style="width:46px;height:46px;border-radius:10px;background:linear-gradient(90deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#051124">🐙</div>
+    <div>
+      <h1>OctoMatch</h1>
+      <p class="small">Smart Team & Bracket Organizer — generate brackets, import scores, and manage events.</p>
+    </div>
+  </header>
 
+  <div class="container">
+    <!-- left control panel -->
+    <div class="panel">
+      <h2>Participants & Import</h2>
+      <div class="small">Add participants manually or paste a two-column list (Name[TAB/COMMA/SPACE]Score).</div>
+
+      <label>Name</label>
+      <input id="nameInput" type="text" placeholder="Paige" />
+
+      <label>Score (optional)</label>
+      <input id="scoreInput" type="number" placeholder="220" />
+
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="addParticipantBtn">Add Participant</button>
+        <button id="clearParticipantsBtn" class="ghost">Clear</button>
+      </div>
+
+      <label style="margin-top:12px">Paste two-column data to import</label>
+      <textarea id="importArea" placeholder="Paige[TAB]220&#10;John,200&#10;Ava 180"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="importBtn">Import</button>
+        <button id="autoSeedBtn" class="ghost">Smart Seed by Score</button>
+      </div>
+
+      <h2 style="margin-top:14px">Participants (live)</h2>
+      <div id="participantsList" class="small">No participants yet.</div>
+
+      <table id="participantsTable" style="display:none">
+        <thead><tr><th>Name</th><th>Score</th><th>Actions</th></tr></thead>
+        <tbody id="participantsTbody"></tbody>
+      </table>
+
+      <div style="margin-top:10px">
+        <label>Tournament Format</label>
+        <select id="formatSelect">
+          <option value="single">Single Elimination</option>
+          <option value="double">Double Elimination (basic)</option>
+          <option value="roundrobin">Round Robin</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="generateBtn">Generate Bracket</button>
+        <button id="resetBtn" class="ghost">Reset Bracket</button>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Custom Rules / Notes</label>
+        <textarea id="rulesArea" placeholder="e.g. Age divisions: Under-18, Adult. Scoring: 10-arrow end."></textarea>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Announcements</label>
+        <div class="announcement">
+          <input id="announcementInput" placeholder="Type announcement..." />
+          <button id="announceBtn" class="ghost">Send</button>
+        </div>
+        <div id="announcements" class="note"></div>
+      </div>
+    </div>
+
+    <!-- bracket area (main) -->
+    <div class="panel" style="min-height:700px;">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2>Bracket</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="muted">Theme</div>
+          <select id="themeSelect" style="min-width:180px">
+            <option value="default">Default Octo (Teal-Blue)</option>
+            <option value="redblue">Red - Blue</option>
+            <option value="purpleblack">Purple - Black</option>
+            <option value="spiderman">Spiderman Theme</option>
+            <option value="blood">Blood Theme</option>
+            <option value="sapphire">Sapphire & Steel</option>
+            <option value="emerald">Emerald & Charcoal</option>
+            <option value="digital">Digital Twilight</option>
+            <option value="coral">Coral & Aqua</option>
+            <option value="citrus">Electric Citrus</option>
+            <option value="artisan">Artisan Clay</option>
+            <option value="forest">Forest Canopy</option>
+            <option value="ocean">Ocean Depth</option>
+            <option value="desert">Desert Sunset</option>
+            <option value="mono">Monochrome Focus</option>
+            <option value="nordic">Soft Nordic</option>
+            <option value="peach">Neutral Peach</option>
+            <option value="retro">Retro Pop</option>
+            <option value="cyber">Cyberpunk Glow</option>
+            <option value="plumgold">Plum & Gold</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="bracketWrap">
+        <div id="bracketEmpty" class="center" style="min-height:420px">
+          <div style="text-align:center;color:var(--muted)">
+            <div style="font-size:22px;margin-bottom:8px">No bracket yet</div>
+            <div>Add participants and click <strong>Generate Bracket</strong>.</div>
+          </div>
+        </div>
+        <div id="bracketRoot" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- right settings & score display -->
+    <div class="panel">
+      <h2>Scoreboard</h2>
+      <div class="small">Live scores and quick editing.</div>
+
+      <div style="margin-top:8px">
+        <label>Competition Name</label>
+        <input id="compName" placeholder="City Archery Cup" />
+      </div>
+
+      <div style="margin-top:8px">
+        <label>Quick score table</label>
+        <div id="scoreTableWrap" style="max-height:280px;overflow:auto;margin-top:6px">
+          <table id="scoreTable" style="width:100%">
+            <thead><tr><th>Name</th><th id="scoreHeader">Score</th></tr></thead>
+            <tbody id="scoreTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <h2 style="margin-top:12px">Extras</h2>
+      <div class="small">Smart grouping & team formation</div>
+      <div style="margin-top:8px">
+        <button id="groupBtn" class="ghost">Form Teams (pair by seed)</button>
+        <button id="rrBtn" class="ghost">Preview Round-Robin</button>
+      </div>
+
+      <div style="margin-top:12px">
+        <h3 style="margin:0 0 6px 0">Custom actions</h3>
+        <div style="display:flex;gap:8px">
+          <button id="exportBtn">Export JSON</button>
+          <button id="copyShare" class="ghost">Copy share data</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="note">Tips: Click a match to enter scores. Winners advance automatically. Use themes to style the bracket.</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>OctoMatch — built for Octopus Hackathon. Code and UI are demo-ready; adapt rules and visuals to taste.</footer>
+
+  <script src="js/script.js"></script>
+</body>
+</html>
