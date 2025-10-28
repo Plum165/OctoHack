@@ -11,6 +11,156 @@
     let i=1; return ()=>('p'+(i++));
   })();
 
+
+document.getElementById("importBtn").addEventListener("click", importParticipants);
+document.getElementById("generateBtn").addEventListener("click", generateBracket);
+document.getElementById("addCategoryBtn").addEventListener("click", addCategory);
+
+function importParticipants() {
+  const text = document.getElementById("importArea").value.trim();
+  if (!text) return alert("Please paste participant data!");
+
+  participants = text.split("\n").map((line, i) => {
+    const parts = line.trim().split(/\s+/);
+    const name = parts.slice(0, -1).join(" ");
+    const score = parseFloat(parts[parts.length - 1]) || 0;
+    return { id: i + 1, name, score, category: "Uncategorized" };
+  });
+
+  updateTable();
+}
+
+function updateTable() {
+  const tbody = document.getElementById("participantTable");
+  tbody.innerHTML = "";
+  participants.forEach(p => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${p.id}</td>
+      <td>${p.name}</td>
+      <td>${p.score}</td>
+      <td>${p.category}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function addCategory() {
+  const name = prompt("Category name:");
+  const min = parseFloat(prompt("Minimum score:"));
+  const max = parseFloat(prompt("Maximum score:"));
+  if (!name || isNaN(min) || isNaN(max)) return alert("Invalid category.");
+
+  categories.push({ name, min, max });
+  renderCategories();
+  assignCategories();
+}
+
+function renderCategories() {
+  const container = document.getElementById("categories");
+  container.innerHTML = "";
+  categories.forEach(c => {
+    const div = document.createElement("div");
+    div.textContent = `${c.name}: ${c.min}–${c.max}`;
+    container.appendChild(div);
+  });
+}
+
+function assignCategories() {
+  participants.forEach(p => {
+    for (let c of categories) {
+      if (p.score >= c.min && p.score <= c.max) {
+        p.category = c.name;
+        break;
+      }
+    }
+  });
+  updateTable();
+}
+
+function generateBracket() {
+  if (participants.length < 2) return alert("Add more participants!");
+  
+  const format = document.getElementById("format").value;
+  const bracketContainer = document.getElementById("bracket");
+  bracketContainer.innerHTML = "";
+
+  const sorted = [...participants].sort((a, b) => b.score - a.score);
+  const bracket = makeBracket(sorted);
+
+  renderBracket(bracket);
+
+  if (format === "double" && bracket.length > 2) {
+    addBronzeMatch(bracket);
+  }
+}
+
+function makeBracket(players) {
+  const rounds = [];
+  let current = players.map(p => ({ p1: p, p2: null }));
+
+  while (current.length > 1) {
+    const nextRound = [];
+    for (let i = 0; i < current.length; i += 2) {
+      const m1 = current[i], m2 = current[i + 1];
+      if (!m2) {
+        // Odd player gets bye
+        nextRound.push({ p1: m1.p1, p2: null });
+      } else {
+        nextRound.push({ p1: m1.p1, p2: m2.p1 });
+      }
+    }
+    rounds.push(current);
+    current = nextRound;
+  }
+
+  rounds.push(current); // final
+  return rounds;
+}
+
+function renderBracket(rounds) {
+  const container = document.getElementById("bracket");
+  container.innerHTML = "";
+
+  rounds.forEach((round, i) => {
+    const col = document.createElement("div");
+    col.className = "round";
+    round.forEach(match => {
+      if (!match.p2) {
+        // bye, skip rendering
+        return;
+      }
+      const div = document.createElement("div");
+      div.className = "match";
+      div.innerHTML = `
+        <div><span class="seed">${match.p1.id}.</span> ${match.p1.name}</div>
+        <div><span class="seed">${match.p2.id}.</span> ${match.p2.name}</div>
+      `;
+      col.appendChild(div);
+    });
+    container.appendChild(col);
+  });
+}
+
+function addBronzeMatch(rounds) {
+  const semiFinals = rounds[rounds.length - 2];
+  if (!semiFinals) return;
+  const losers = semiFinals.map(m => m.p2).filter(Boolean);
+  if (losers.length === 2) {
+    const col = document.createElement("div");
+    col.className = "round";
+    const div = document.createElement("div");
+    div.className = "match";
+    div.innerHTML = `
+      <strong>Bronze Match</strong>
+      <div><span class="seed">${losers[0].id}.</span> ${losers[0].name}</div>
+      <div><span class="seed">${losers[1].id}.</span> ${losers[1].name}</div>
+    `;
+    document.getElementById("bracket").appendChild(col);
+    col.appendChild(div);
+  }
+}
+
+
   // DOM refs
   const nameInput = document.getElementById('nameInput');
   const scoreInput = document.getElementById('scoreInput');
@@ -613,5 +763,173 @@
   window.OctoMatch = {
     getState: ()=>({participants, bracket})
   };
+// OctoMatch — Smart Team & Bracket Organizer
+// Handles participant input, bracket generation, and layout
+
+
+
+// Add participant
+document.getElementById('addParticipantBtn').onclick = () => {
+  const name = nameInput.value.trim();
+  const score = scoreInput.value.trim();
+  if (!name) return alert("Enter a name!");
+  participants.push({ name, score: score ? parseInt(score) : 0 });
+  renderParticipants();
+  nameInput.value = '';
+  scoreInput.value = '';
+};
+
+// Clear all participants
+document.getElementById('clearParticipantsBtn').onclick = () => {
+  if (confirm("Clear all participants?")) {
+    participants.length = 0;
+    renderParticipants();
+  }
+};
+
+// Import participants from text area
+document.getElementById('importBtn').onclick = () => {
+  const text = document.getElementById('importArea').value.trim();
+  if (!text) return alert("Paste something first!");
+  const lines = text.split(/\n/);
+  for (const line of lines) {
+    const parts = line.split(/[\t, ]+/);
+    if (parts[0]) participants.push({ name: parts[0], score: parseInt(parts[1]) || 0 });
+  }
+  renderParticipants();
+};
+
+// Smart seed by score
+document.getElementById('autoSeedBtn').onclick = () => {
+  participants.sort((a, b) => b.score - a.score);
+  renderParticipants();
+};
+
+// Generate bracket
+document.getElementById('generateBtn').onclick = () => {
+  if (participants.length < 2) return alert("Add at least 2 participants.");
+  generateBracket();
+};
+
+// Reset bracket
+document.getElementById('resetBtn').onclick = () => {
+  bracketRoot.innerHTML = '';
+  bracketRoot.style.display = 'none';
+  bracketEmpty.style.display = 'flex';
+};
+
+// Render participants table
+function renderParticipants() {
+  if (participants.length === 0) {
+    participantsList.style.display = '';
+    participantsTable.style.display = 'none';
+    participantsList.textContent = 'No participants yet.';
+    return;
+  }
+
+  participantsList.style.display = 'none';
+  participantsTable.style.display = '';
+  participantsTbody.innerHTML = '';
+  scoreTbody.innerHTML = '';
+
+  participants.forEach((p, i) => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${p.name}</td>
+      <td>${p.score}</td>
+      <td><button data-i="${i}" class="delBtn">❌</button></td>`;
+    participantsTbody.appendChild(row);
+
+    const srow = document.createElement('tr');
+    srow.innerHTML = `<td>${p.name}</td><td>${p.score}</td>`;
+    scoreTbody.appendChild(srow);
+  });
+
+  // Delete button
+  document.querySelectorAll('.delBtn').forEach(btn => {
+    btn.onclick = e => {
+      const i = parseInt(btn.dataset.i);
+      participants.splice(i, 1);
+      renderParticipants();
+    };
+  });
+}
+
+// Generate single-elimination bracket (pyramid layout)
+function generateBracket() {
+  const shuffled = [...participants];
+  shuffled.sort((a, b) => Math.random() - 0.5); // randomize
+
+  // Ensure even number of players
+  if (shuffled.length % 2 !== 0) shuffled.pop();
+
+  bracketRoot.innerHTML = '';
+  bracketEmpty.style.display = 'none';
+  bracketRoot.style.display = 'block';
+  bracketRoot.className = 'bracket pyramid';
+
+  let currentRound = shuffled.map(p => ({ name: p.name, score: 0 }));
+  let roundNum = 1;
+
+  while (currentRound.length > 1) {
+    const nextRound = [];
+    const roundDiv = document.createElement('div');
+    roundDiv.className = 'round';
+    roundDiv.innerHTML = `<h3>Round ${roundNum}</h3>`;
+    const matchesDiv = document.createElement('div');
+    matchesDiv.className = 'matches';
+
+    for (let i = 0; i < currentRound.length; i += 2) {
+      const a = currentRound[i];
+      const b = currentRound[i + 1];
+      if (!b) continue;
+
+      const match = document.createElement('div');
+      match.className = 'match';
+
+      match.innerHTML = `
+        <div class="player"><input type="number" class="scoreInput" value="0" /> ${a.name}</div>
+        <div class="player"><input type="number" class="scoreInput" value="0" /> ${b.name}</div>
+      `;
+
+      matchesDiv.appendChild(match);
+
+      nextRound.push({ name: `Winner of ${a.name} vs ${b.name}`, score: 0 });
+    }
+
+    roundDiv.appendChild(matchesDiv);
+    bracketRoot.appendChild(roundDiv);
+    currentRound = nextRound;
+    roundNum++;
+  }
+
+  stylePyramid();
+}
+
+// Style rounds in pyramid layout
+function stylePyramid() {
+  const rounds = document.querySelectorAll('.round');
+  rounds.forEach((r, i) => {
+    r.style.display = 'flex';
+    r.style.flexDirection = 'column';
+    r.style.alignItems = 'center';
+    r.style.margin = '40px 0';
+  });
+
+  const matches = document.querySelectorAll('.match');
+  matches.forEach(m => {
+    m.style.background = 'var(--bg-2)';
+    m.style.padding = '10px 16px';
+    m.style.borderRadius = '10px';
+    m.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    m.style.margin = '10px auto';
+    m.style.width = 'fit-content';
+  });
+}
+
+// Theme handling
+themeSelect.onchange = () => {
+  document.body.dataset.theme = themeSelect.value;
+};
 
 })();

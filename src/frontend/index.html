@@ -4,19 +4,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>OctoMatch — Smart Team & Bracket Organizer</title>
-<link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header>
-    <div style="width:46px;height:46px;border-radius:10px;background:linear-gradient(90deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#051124">🐙</div>
+    <div class="logo">🐙</div>
     <div>
       <h1>OctoMatch</h1>
-      <p class="small">Smart Team & Bracket Organizer — generate brackets, import scores, and manage events.</p>
+      <p class="small">Smart Team & Bracket Organizer — generate brackets, import scores, manage teams & divisions.</p>
     </div>
   </header>
 
   <div class="container">
-    <!-- left control panel -->
+    <!-- LEFT CONTROL PANEL -->
     <div class="panel">
       <h2>Participants & Import</h2>
       <div class="small">Add participants manually or paste a two-column list (Name[TAB/COMMA/SPACE]Score).</div>
@@ -27,14 +27,14 @@
       <label>Score (optional)</label>
       <input id="scoreInput" type="number" placeholder="220" />
 
-      <div style="display:flex;gap:8px;margin-top:8px">
+      <div class="row" style="margin-top:8px">
         <button id="addParticipantBtn">Add Participant</button>
         <button id="clearParticipantsBtn" class="ghost">Clear</button>
       </div>
 
       <label style="margin-top:12px">Paste two-column data to import</label>
       <textarea id="importArea" placeholder="Paige[TAB]220&#10;John,200&#10;Ava 180"></textarea>
-      <div style="display:flex;gap:8px;margin-top:8px">
+      <div class="row" style="margin-top:8px">
         <button id="importBtn">Import</button>
         <button id="autoSeedBtn" class="ghost">Smart Seed by Score</button>
       </div>
@@ -43,31 +43,69 @@
       <div id="participantsList" class="small">No participants yet.</div>
 
       <table id="participantsTable" style="display:none">
-        <thead><tr><th>Name</th><th>Score</th><th>Actions</th></tr></thead>
+        <thead><tr><th>#</th><th>Name</th><th>Score</th><th>Actions</th></tr></thead>
         <tbody id="participantsTbody"></tbody>
       </table>
 
-      <div style="margin-top:10px">
-        <label>Tournament Format</label>
+      <div style="margin-top:12px">
+        <h2>Categories</h2>
+        <div class="small">Create divisions (e.g. Beginner 0–50).</div>
+        <div id="categoryWrap" class="category-wrap"></div>
+        <div class="row" style="margin-top:6px">
+          <input id="catName" placeholder="Beginner" style="flex:1" />
+          <input id="catMin" type="number" placeholder="Min" style="width:72px" />
+          <input id="catMax" type="number" placeholder="Max" style="width:72px" />
+          <button id="addCategoryBtn" class="ghost">Add</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <h2>Tournament Options</h2>
+        <label>Format</label>
         <select id="formatSelect">
           <option value="single">Single Elimination</option>
-          <option value="double">Double Elimination (basic)</option>
+          <option value="double">Double Elimination (Bronze Match)</option>
           <option value="roundrobin">Round Robin</option>
         </select>
-      </div>
 
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button id="generateBtn">Generate Bracket</button>
-        <button id="resetBtn" class="ghost">Reset Bracket</button>
+        <div class="row" style="align-items:center;margin-top:8px">
+          <input id="teamMode" type="checkbox">
+          <label for="teamMode" style="margin:0">Team Mode</label>
+        </div>
+
+        <div class="row" style="align-items:center;margin-top:6px">
+          <input id="autoBye" type="checkbox" checked>
+          <label for="autoBye" style="margin:0">Auto-advance top seed if uneven</label>
+        </div>
+
+        <div class="row" style="align-items:center;margin-top:6px">
+          <input id="bronzeMatch" type="checkbox" checked>
+          <label for="bronzeMatch" style="margin:0">Include Bronze Match (Double Only)</label>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="generateBtn">Generate Bracket</button>
+          <button id="resetBtn" class="ghost">Reset Bracket</button>
+        </div>
       </div>
 
       <div style="margin-top:12px">
-        <label>Custom Rules / Notes</label>
-        <textarea id="rulesArea" placeholder="e.g. Age divisions: Under-18, Adult. Scoring: 10-arrow end."></textarea>
+        <h2>Teams</h2>
+        <div class="small">Create teams for team tournaments.</div>
+        <div id="teamList" class="team-list"></div>
+        <div class="row" style="margin-top:6px">
+          <input id="teamName" placeholder="Team Hydra" style="flex:1" />
+          <button id="addTeamBtn" class="ghost">Add</button>
+        </div>
       </div>
 
       <div style="margin-top:12px">
-        <label>Announcements</label>
+        <h2>Custom Rules / Notes</h2>
+        <textarea id="rulesArea" placeholder="e.g. Age divisions, 10-arrow end scoring, best-of-three finals."></textarea>
+      </div>
+
+      <div style="margin-top:12px">
+        <h2>Announcements</h2>
         <div class="announcement">
           <input id="announcementInput" placeholder="Type announcement..." />
           <button id="announceBtn" class="ghost">Send</button>
@@ -76,9 +114,9 @@
       </div>
     </div>
 
-    <!-- bracket area (main) -->
+    <!-- BRACKET AREA -->
     <div class="panel" style="min-height:700px;">
-      <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="panel-header">
         <h2>Bracket</h2>
         <div style="display:flex;gap:8px;align-items:center">
           <div class="muted">Theme</div>
@@ -118,7 +156,7 @@
       </div>
     </div>
 
-    <!-- right settings & score display -->
+    <!-- RIGHT SCOREBOARD PANEL -->
     <div class="panel">
       <h2>Scoreboard</h2>
       <div class="small">Live scores and quick editing.</div>
@@ -132,14 +170,14 @@
         <label>Quick score table</label>
         <div id="scoreTableWrap" style="max-height:280px;overflow:auto;margin-top:6px">
           <table id="scoreTable" style="width:100%">
-            <thead><tr><th>Name</th><th id="scoreHeader">Score</th></tr></thead>
+            <thead><tr><th>#</th><th>Name / Team</th><th id="scoreHeader">Score</th></tr></thead>
             <tbody id="scoreTbody"></tbody>
           </table>
         </div>
       </div>
 
       <h2 style="margin-top:12px">Extras</h2>
-      <div class="small">Smart grouping & team formation</div>
+      <div class="small">Smart grouping & quick actions</div>
       <div style="margin-top:8px">
         <button id="groupBtn" class="ghost">Form Teams (pair by seed)</button>
         <button id="rrBtn" class="ghost">Preview Round-Robin</button>
@@ -149,17 +187,17 @@
         <h3 style="margin:0 0 6px 0">Custom actions</h3>
         <div style="display:flex;gap:8px">
           <button id="exportBtn">Export JSON</button>
-          <button id="copyShare" class="ghost">Copy share data</button>
+          <button id="copyShare" class="ghost">Copy Share Data</button>
         </div>
       </div>
 
       <div style="margin-top:12px">
-        <div class="note">Tips: Click a match to enter scores. Winners advance automatically. Use themes to style the bracket.</div>
+        <div class="note">Tips: Click a match to enter scores. “Byes” auto-skip top seed if enabled. Bronze match triggers only in double elimination.</div>
       </div>
     </div>
   </div>
 
-  <footer>OctoMatch — built for Octopus Hackathon. Code and UI are demo-ready; adapt rules and visuals to taste.</footer>
+  <footer>OctoMatch — built for Octopus Hackathon 🐙. Supports teams, categories, and smart brackets.</footer>
 
   <script src="js/script.js"></script>
 </body>
