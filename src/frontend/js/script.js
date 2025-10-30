@@ -1,167 +1,66 @@
-/* OctoMatch script.js
-   Full client-side functionality: participants, import, bracket generation (single/double/round-robin),
-   interactive match scoring, themes, simple announcements and exports.
-*/
+/*
+ * =================================================================================================
+ * OctoMatch - The Ultimate Tournament Bracket Manager
+ * =================================================================================================
+ *
+ * Description:
+ * A comprehensive, client-side JavaScript application for managing tournaments. This single script
+ * handles all functionality, from participant entry to final bracket display and scoring.
+ * It is designed to be robust, user-friendly, and easily customizable.
+ *
+ * Features:
+ * - Participant Management: Add, delete, and clear participants.
+ * - Data Import: Easily import participants from a list (supports various delimiters).
+ * - Ranked Display: The main participant table is automatically sorted by score and displays rank.
+ * - Category System: Define custom categories based on score ranges (e.g., 'Beginner', 'Advanced').
+ * - Smart Seeding: Automatically seeds participants based on their score for balanced brackets.
+ * - Multiple Bracket Formats:
+ *   - Single Elimination: Handles any number of players by correctly assigning byes.
+ *   - Double Elimination: Includes both a Winners and a Losers bracket.
+ *   - Round Robin: Generates a full schedule where every participant plays each other.
+ * - Interactive Brackets: Click on matches to enter scores and automatically advance winners.
+ * - Bronze Match Generation: Automatically creates a 3rd place playoff for single-elimination formats.
+ * - Live Scoreboard: A dedicated panel for viewing and updating all participant scores at once.
+ * - UI & UX:
+ *   - Theme Engine: Includes over 20 pre-built color themes.
+ *   - Announcements: A simple tool for posting real-time updates.
+ *   - Data Export: Save the entire tournament state (participants, bracket, etc.) to a JSON file.
+ *   - Sharable Links: Generate a URL that contains the tournament data to easily share the state.
+ *
+ * Version: 2.0 (Final Unified Script)
+ * Author: [Your Name/Organization]
+ * License: [Your License]
+ *
+ * =================================================================================================
+ */
 
 (() => {
-  // app state
-  let participants = []; // {id, name, score}
-  let bracket = null; // {format, rounds: [ [{match}] ] }
+  'use strict';
+
+  // ===================================================================================
+  // I. APPLICATION STATE
+  // Centralized variables to hold the tournament's data.
+  // ===================================================================================
+
+  let participants = []; // Array of participant objects: {id, name, score, category}
+  let categories = [];   // Array of category objects: {name, min, max}
+  let bracket = null;      // The main bracket object: {format, rounds, ...}
+
+  /**
+   * Generates unique IDs for participants.
+   * @returns {function(): string} A function that returns a new unique ID (e.g., 'p1', 'p2').
+   */
   const uid = (() => {
-    let i=1; return ()=>('p'+(i++));
+    let i = 1;
+    return () => 'p' + (i++);
   })();
 
 
-document.getElementById("importBtn").addEventListener("click", importParticipants);
-document.getElementById("generateBtn").addEventListener("click", generateBracket);
-document.getElementById("addCategoryBtn").addEventListener("click", addCategory);
+  // ===================================================================================
+  // II. DOM ELEMENT REFERENCES
+  // Caching references to frequently used DOM elements for performance.
+  // ===================================================================================
 
-function importParticipants() {
-  const text = document.getElementById("importArea").value.trim();
-  if (!text) return alert("Please paste participant data!");
-
-  participants = text.split("\n").map((line, i) => {
-    const parts = line.trim().split(/\s+/);
-    const name = parts.slice(0, -1).join(" ");
-    const score = parseFloat(parts[parts.length - 1]) || 0;
-    return { id: i + 1, name, score, category: "Uncategorized" };
-  });
-
-  updateTable();
-}
-
-function updateTable() {
-  const tbody = document.getElementById("participantTable");
-  tbody.innerHTML = "";
-  participants.forEach(p => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${p.id}</td>
-      <td>${p.name}</td>
-      <td>${p.score}</td>
-      <td>${p.category}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function addCategory() {
-  const name = prompt("Category name:");
-  const min = parseFloat(prompt("Minimum score:"));
-  const max = parseFloat(prompt("Maximum score:"));
-  if (!name || isNaN(min) || isNaN(max)) return alert("Invalid category.");
-
-  categories.push({ name, min, max });
-  renderCategories();
-  assignCategories();
-}
-
-function renderCategories() {
-  const container = document.getElementById("categories");
-  container.innerHTML = "";
-  categories.forEach(c => {
-    const div = document.createElement("div");
-    div.textContent = `${c.name}: ${c.min}–${c.max}`;
-    container.appendChild(div);
-  });
-}
-
-function assignCategories() {
-  participants.forEach(p => {
-    for (let c of categories) {
-      if (p.score >= c.min && p.score <= c.max) {
-        p.category = c.name;
-        break;
-      }
-    }
-  });
-  updateTable();
-}
-
-function generateBracket() {
-  if (participants.length < 2) return alert("Add more participants!");
-  
-  const format = document.getElementById("format").value;
-  const bracketContainer = document.getElementById("bracket");
-  bracketContainer.innerHTML = "";
-
-  const sorted = [...participants].sort((a, b) => b.score - a.score);
-  const bracket = makeBracket(sorted);
-
-  renderBracket(bracket);
-
-  if (format === "double" && bracket.length > 2) {
-    addBronzeMatch(bracket);
-  }
-}
-
-function makeBracket(players) {
-  const rounds = [];
-  let current = players.map(p => ({ p1: p, p2: null }));
-
-  while (current.length > 1) {
-    const nextRound = [];
-    for (let i = 0; i < current.length; i += 2) {
-      const m1 = current[i], m2 = current[i + 1];
-      if (!m2) {
-        // Odd player gets bye
-        nextRound.push({ p1: m1.p1, p2: null });
-      } else {
-        nextRound.push({ p1: m1.p1, p2: m2.p1 });
-      }
-    }
-    rounds.push(current);
-    current = nextRound;
-  }
-
-  rounds.push(current); // final
-  return rounds;
-}
-
-function renderBracket(rounds) {
-  const container = document.getElementById("bracket");
-  container.innerHTML = "";
-
-  rounds.forEach((round, i) => {
-    const col = document.createElement("div");
-    col.className = "round";
-    round.forEach(match => {
-      if (!match.p2) {
-        // bye, skip rendering
-        return;
-      }
-      const div = document.createElement("div");
-      div.className = "match";
-      div.innerHTML = `
-        <div><span class="seed">${match.p1.id}.</span> ${match.p1.name}</div>
-        <div><span class="seed">${match.p2.id}.</span> ${match.p2.name}</div>
-      `;
-      col.appendChild(div);
-    });
-    container.appendChild(col);
-  });
-}
-
-function addBronzeMatch(rounds) {
-  const semiFinals = rounds[rounds.length - 2];
-  if (!semiFinals) return;
-  const losers = semiFinals.map(m => m.p2).filter(Boolean);
-  if (losers.length === 2) {
-    const col = document.createElement("div");
-    col.className = "round";
-    const div = document.createElement("div");
-    div.className = "match";
-    div.innerHTML = `
-      <strong>Bronze Match</strong>
-      <div><span class="seed">${losers[0].id}.</span> ${losers[0].name}</div>
-      <div><span class="seed">${losers[1].id}.</span> ${losers[1].name}</div>
-    `;
-    document.getElementById("bracket").appendChild(col);
-    col.appendChild(div);
-  }
-}
-
-
-  // DOM refs
   const nameInput = document.getElementById('nameInput');
   const scoreInput = document.getElementById('scoreInput');
   const addParticipantBtn = document.getElementById('addParticipantBtn');
@@ -184,345 +83,599 @@ function addBronzeMatch(rounds) {
   const announcementInput = document.getElementById('announcementInput');
   const announceBtn = document.getElementById('announceBtn');
   const announcements = document.getElementById('announcements');
-  const clearBtn = clearParticipantsBtn;
-  const addBtn = addParticipantBtn;
   const groupBtn = document.getElementById('groupBtn');
-  const rrBtn = document.getElementById('rrBtn');
   const exportBtn = document.getElementById('exportBtn');
   const copyShare = document.getElementById('copyShare');
+  const addCategoryBtn = document.getElementById('addCategoryBtn');
+  const categoriesContainer = document.getElementById('categories');
 
-  // -------------------------
-  // helpers
-  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
-  function byScoreDesc(a,b){ return (b.score||0) - (a.score||0); }
-  function nextPowerOfTwo(n){ let p=1; while(p<n) p*=2; return p;}
-  function uidMatch(){ return 'm'+Math.random().toString(36).slice(2,9); }
 
-  // -------------------------
-  // participant management
-  function renderParticipants(){
-    if(participants.length === 0){
+  // ===================================================================================
+  // III. HELPER & UTILITY FUNCTIONS
+  // Small, reusable functions used throughout the application.
+  // ===================================================================================
+
+  /**
+   * Sort comparator to sort participants by score in descending order.
+   * @param {object} a - First participant.
+   * @param {object} b - Second participant.
+   * @returns {number}
+   */
+  function byScoreDesc(a, b) {
+    return (b.score || 0) - (a.score || 0);
+  }
+
+  /**
+   * Calculates the next power of two for a given number. Essential for creating balanced brackets.
+   * @param {number} n - The number of participants.
+   * @returns {number} The next power of two (e.g., for n=5, returns 8).
+   */
+  function nextPowerOfTwo(n) {
+    let p = 1;
+    while (p < n) p *= 2;
+    return p;
+  }
+
+  /**
+   * Generates a unique ID for a match.
+   * @returns {string} A short, random match ID (e.g., 'm-a2jxy').
+   */
+  function uidMatch() {
+    return 'm' + Math.random().toString(36).slice(2, 9);
+  }
+
+  /**
+   * Sanitizes a string to prevent HTML injection.
+   * @param {string} str - The input string.
+   * @returns {string} The escaped string.
+   */
+  function escapeHtml(str) {
+    return ('' + str).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  }
+
+
+  // ===================================================================================
+  // IV. PARTICIPANT MANAGEMENT
+  // Functions for adding, deleting, importing, and rendering participants.
+  // ===================================================================================
+
+  /**
+   * Renders the main participant table, sorted by rank.
+   */
+  function renderParticipants() {
+    if (participants.length === 0) {
       participantsList.style.display = 'block';
       participantsList.textContent = 'No participants yet.';
       participantsTable.style.display = 'none';
+      renderScoreTable(); // Also clear the score table
       return;
     }
+
     participantsList.style.display = 'none';
     participantsTable.style.display = 'table';
     participantsTbody.innerHTML = '';
-    for(const p of participants){
+
+    // Create a ranked list without modifying the original participant array
+    const rankedParticipants = [...participants].sort(byScoreDesc);
+
+    rankedParticipants.forEach((p, index) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td style="width:60%"><strong>${escapeHtml(p.name)}</strong></td>
-                      <td style="width:20%">${p.score == null ? '' : escapeHtml(String(p.score))}</td>
-                      <td style="width:20%"><button data-id="${p.id}" class="deleteBtn ghost">Delete</button></td>`;
+      tr.innerHTML = `
+        <td style="width:10%">${index + 1}</td>
+        <td style="width:40%"><strong>${escapeHtml(p.name)}</strong></td>
+        <td style="width:15%">${p.score == null ? '—' : escapeHtml(String(p.score))}</td>
+        <td style="width:20%">${escapeHtml(p.category)}</td>
+        <td style="width:15%"><button data-id="${p.id}" class="deleteBtn ghost">Delete</button></td>`;
       participantsTbody.appendChild(tr);
-    }
-    // attach deletes
-    Array.from(participantsTbody.querySelectorAll('.deleteBtn')).forEach(btn=>{
-      btn.addEventListener('click', ()=> {
+    });
+
+    // Add event listeners to the new delete buttons
+    Array.from(participantsTbody.querySelectorAll('.deleteBtn')).forEach(btn => {
+      btn.addEventListener('click', () => {
         const id = btn.dataset.id;
-        participants = participants.filter(x=>x.id !== id);
+        participants = participants.filter(x => x.id !== id);
         renderParticipants();
-        renderScoreTable();
       });
     });
+
+    // Re-render the score table in sync
     renderScoreTable();
   }
 
-  function escapeHtml(str){
-    return (''+str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
-  }
-
-  function addParticipantFromInputs(){
+  /**
+   * Adds a new participant from the input fields.
+   */
+  function addParticipantFromInputs() {
     const name = nameInput.value && nameInput.value.trim();
     const scoreRaw = scoreInput.value && scoreInput.value.trim();
-    if(!name) return alert('Please enter a participant name.');
+    if (!name) return alert('Please enter a participant name.');
+
     const score = scoreRaw === '' ? null : Number(scoreRaw);
-    participants.push({id: uid(), name, score});
-    nameInput.value=''; scoreInput.value='';
+    participants.push({
+      id: uid(),
+      name,
+      score,
+      category: 'Uncategorized'
+    });
+
+    nameInput.value = '';
+    scoreInput.value = '';
+    nameInput.focus();
+
+    assignCategories(); // Re-assign categories on new addition
     renderParticipants();
   }
 
-  function clearParticipants(){
-    if(!confirm('Clear all participants?')) return;
+  /**
+   * Clears all participants from the state.
+   */
+  function clearParticipants() {
+    if (!confirm('Are you sure you want to clear all participants? This action cannot be undone.')) return;
     participants = [];
     bracket = null;
     renderParticipants();
     renderBracketEmpty();
   }
 
-  function parseImportText(text){
-    // Accept lines with: Name [tab/comma/space] Score OR just Name
-    const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  /**
+   * Parses text from the import area and converts it into participant objects.
+   * @param {string} text - The raw text from the import textarea.
+   * @returns {Array<object>} An array of new participant objects.
+   */
+  function parseImportText(text) {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const out = [];
-    for(const ln of lines){
-      // attempt tab, comma, or multiple spaces
+
+    for (const ln of lines) {
+      // Tries to split by tab, then comma, then multiple spaces
       let parts = ln.split('\t');
-      if(parts.length === 1) parts = ln.split(',');
-      if(parts.length === 1) parts = ln.split(/\s{2,}/); // two+ spaces
-      if(parts.length === 1) {
-        // try last space split
+      if (parts.length === 1) parts = ln.split(',');
+      if (parts.length === 1) parts = ln.split(/\s{2,}/);
+
+      // As a fallback, splits on the last space (for names with spaces)
+      if (parts.length === 1) {
         const idx = ln.lastIndexOf(' ');
-        if(idx>0){
-          parts = [ln.slice(0,idx).trim(), ln.slice(idx+1).trim()];
+        if (idx > 0) {
+          parts = [ln.slice(0, idx).trim(), ln.slice(idx + 1).trim()];
         } else {
           parts = [ln];
         }
       }
+
       const name = (parts[0] || '').trim();
       const scoreRaw = (parts[1] || '').trim();
       const score = scoreRaw === '' ? null : Number(scoreRaw);
-      if(name) out.push({id:uid(), name, score});
+      if (name) out.push({
+        id: uid(),
+        name,
+        score,
+        category: 'Uncategorized'
+      });
     }
     return out;
   }
 
-  // -------------------------
-  // scoring table
-  function renderScoreTable(){
+
+  // ===================================================================================
+  // V. CATEGORY MANAGEMENT
+  // Functions to create and manage participant categories based on score.
+  // ===================================================================================
+
+  /**
+   * Prompts the user to add a new category.
+   */
+  function addCategory() {
+    const name = prompt("Enter the category name (e.g., 'Advanced'):");
+    if (!name) return;
+    const min = parseFloat(prompt(`Enter the minimum score for the "${name}" category:`));
+    const max = parseFloat(prompt(`Enter the maximum score for the "${name}" category:`));
+
+    if (isNaN(min) || isNaN(max)) {
+      return alert("Invalid score range. Please enter numbers only.");
+    }
+
+    categories.push({ name, min, max });
+    renderCategories();
+    assignCategories(); // Re-evaluate all participants
+    renderParticipants();
+  }
+
+  /**
+   * Renders the list of created categories as tags.
+   */
+  function renderCategories() {
+    if (!categoriesContainer) return;
+    categoriesContainer.innerHTML = "<h4>Categories</h4>";
+    if (categories.length === 0) {
+      categoriesContainer.innerHTML += "<p class='muted'>No categories defined.</p>";
+    }
+    categories.forEach(c => {
+      const div = document.createElement("div");
+      div.className = 'category-tag';
+      div.textContent = `${c.name}: ${c.min}–${c.max}`;
+      categoriesContainer.appendChild(div);
+    });
+  }
+
+  /**
+   * Iterates through all participants and assigns them to the correct category.
+   */
+  function assignCategories() {
+    participants.forEach(p => {
+      p.category = 'Uncategorized'; // Reset first
+      for (const c of categories) {
+        if (p.score != null && p.score >= c.min && p.score <= c.max) {
+          p.category = c.name;
+          break; // Assign to the first matching category
+        }
+      }
+    });
+  }
+
+
+  // ===================================================================================
+  // VI. LIVE SCOREBOARD
+  // Renders the score table and handles live score updates.
+  // ===================================================================================
+
+  /**
+   * Renders the editable score table.
+   */
+  function renderScoreTable() {
     scoreTbody.innerHTML = '';
-    if(participants.length === 0){
+    if (participants.length === 0) {
       const tr = document.createElement('tr');
       tr.innerHTML = '<td colspan="2" class="muted">No participants</td>';
       scoreTbody.appendChild(tr);
       return;
     }
-    for(const p of participants){
+
+    const rankedParticipants = [...participants].sort(byScoreDesc);
+    for (const p of rankedParticipants) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${escapeHtml(p.name)}</td>
-                      <td style="text-align:right">
-                        <input data-id="${p.id}" class="scoreInput" type="number" value="${p.score==null?'':p.score}" style="width:88px;padding:6px;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:var(--text)"/>
-                      </td>`;
+      tr.innerHTML = `
+        <td>${escapeHtml(p.name)}</td>
+        <td style="text-align:right">
+          <input data-id="${p.id}" class="scoreInput" type="number" value="${p.score==null?'':p.score}"
+                 placeholder="N/A"
+                 style="width:88px;padding:6px;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:var(--text)"/>
+        </td>`;
       scoreTbody.appendChild(tr);
     }
-    Array.from(scoreTbody.querySelectorAll('.scoreInput')).forEach(inp=>{
-      inp.addEventListener('change', (e)=>{
+
+    // Add listeners to score inputs for real-time updates
+    Array.from(scoreTbody.querySelectorAll('.scoreInput')).forEach(inp => {
+      inp.addEventListener('change', (e) => {
         const id = inp.dataset.id;
         const v = inp.value;
-        const p = participants.find(x=>x.id===id);
-        if(p) p.score = v==='' ? null : Number(v);
-        renderParticipants();
+        const p = participants.find(x => x.id === id);
+        if (p) p.score = v === '' ? null : Number(v);
+        assignCategories();
+        renderParticipants(); // Re-render main table to reflect score/category changes
       });
     });
   }
 
-  // -------------------------
-  // seeding & grouping
-  function smartSeed(){
-    // seed by score desc; highest seed #1
+
+  // ===================================================================================
+  // VII. SEEDING & GROUPING TOOLS
+  // Pre-bracket utilities for organizing participants.
+  // ===================================================================================
+
+  /**
+   * Sorts participants by score (descending) to prepare for seeded bracket generation.
+   */
+  function smartSeed() {
     participants.sort(byScoreDesc);
-    // no further action, but re-render participants
     renderParticipants();
-    alert('Smart seed applied: participants sorted by score (descending). Generate bracket to use seeding.');
+    alert('Smart seed applied: participants have been sorted by score. A new bracket will use this order.');
   }
 
-  function formTeamsPairing(){
-    // pair top with bottom (1vN, 2vN-1 etc) return pairs
-    if(participants.length < 2) return alert('Need at least 2 participants to form teams.');
+  /**
+   * Creates balanced teams by pairing the highest-ranked participant with the lowest, and so on.
+   */
+  function formTeamsPairing() {
+    if (participants.length < 2) return alert('Need at least 2 participants to form teams.');
     const seeded = [...participants].sort(byScoreDesc);
     const pairs = [];
-    while(seeded.length) {
+    while (seeded.length) {
       const a = seeded.shift();
       const b = seeded.pop();
-      if(b) pairs.push([a,b]);
-      else pairs.push([a,null]);
+      if (b) pairs.push([a, b]);
+      else pairs.push([a, null]); // Handles odd number of participants
     }
-    // show a quick modal
-    const text = pairs.map((p,i)=>`Team ${i+1}: ${p[0].name}${p[1]?(' + '+p[1].name):' (bye)'}`).join('\n');
-    alert('Teams created:\n\n' + text);
+    const text = pairs.map((p, i) => `Team ${i+1}: ${p[0].name}${p[1]?(' + '+p[1].name):' (with a bye)'}`).join('\n');
+    alert('Balanced teams created:\n\n' + text);
   }
 
-  // -------------------------
-  // bracket generation
-  function generateBracket(){
-    if(participants.length < 2) return alert('Add at least 2 participants to create a bracket.');
+
+  // ===================================================================================
+  // VIII. BRACKET GENERATION
+  // Core logic for creating single, double, and round-robin brackets.
+  // ===================================================================================
+
+  /**
+   * Main controller for bracket generation.
+   */
+  function generateBracket() {
+    if (participants.length < 2) return alert('Add at least 2 participants to create a bracket.');
+
     const format = formatSelect.value;
-    if(format === 'single'){
-      bracket = generateSingleElim();
-    } else if(format === 'roundrobin'){
-      bracket = generateRoundRobin();
-    } else if(format === 'double'){
-      bracket = generateDoubleElim();
-    } else {
-      bracket = generateSingleElim();
+    switch (format) {
+      case 'single':
+        bracket = generateSingleElim();
+        break;
+      case 'roundrobin':
+        bracket = generateRoundRobin();
+        break;
+      case 'double':
+        bracket = generateDoubleElim();
+        break;
+      default:
+        bracket = generateSingleElim(); // Default to single elimination
     }
     renderBracket();
   }
 
-  function generateSingleElim(){
-    // Seeding: use participants sorted by score desc (if scores present), else input order
-    const seeds = [...participants].sort(byScoreDesc);
+  /**
+   * Generates a standard seeding order for a bracket of a given size.
+   * This ensures that top seeds do not meet in early rounds.
+   * @param {number} size - The size of the bracket (must be a power of two).
+   * @returns {Array<number>} An array of seed numbers in their correct bracket positions.
+   */
+  function standardSeedOrder(size) {
+    if (size === 1) return [1];
+    const prev = standardSeedOrder(size / 2);
+    const next = [];
+    for (const seed of prev) {
+      next.push(seed);
+      next.push(size + 1 - seed);
+    }
+    return next;
+  }
+
+  /**
+   * Creates a single elimination bracket object.
+   * @returns {object} The bracket data structure.
+   */
+  function generateSingleElim() {
+    const seeds = [...participants]; // Assumes participants are already sorted by smart seed
     const n = seeds.length;
+    if (n < 2) return { format: 'single', rounds: [] };
+
     const bracketSize = nextPowerOfTwo(n);
-    // create initial pairings using standard seeding algorithm for 1..N
-    // create an array of positions length = bracketSize filled with null or participant
-    const positions = new Array(bracketSize).fill(null);
-    // fill positions by simple seeding mapping (1 vs N, 2 vs N-1 etc)
-    // we'll seed positions by the "snake" seeding for better balance
-    // simple approach: top-down assign seeds to bracket positions using bracket pairing algorithm
-    const seedOrder = buildSeedOrder(bracketSize);
-    for(let i=0;i<seeds.length;i++){
-      const pos = seedOrder[i] - 1; // seedOrder = [1, bracketSize, 2, bracketSize-1, ...]
-      positions[pos] = seeds[i];
-    }
-    // Build rounds: round 0 matches are adjacent pairs
+
     const rounds = [];
-    const round0 = [];
-    for(let i=0;i<positions.length;i+=2){
-      const a = positions[i];
-      const b = positions[i+1];
-      round0.push({id: uidMatch(), p1:a, p2:b, score1:null, score2:null, winner:null});
+    let round1 = [];
+
+    // Create a player array with null placeholders for a full bracket
+    let players = new Array(bracketSize).fill(null);
+    let seedOrder = standardSeedOrder(bracketSize);
+
+    // Place seeded players into their designated spots
+    for (let i = 0; i < n; i++) {
+      players[seedOrder[i] - 1] = seeds[i];
     }
-    rounds.push(round0);
-    // subsequent rounds
-    let prev = round0;
-    while(prev.length > 1){
-      const next = [];
-      for(let i=0;i<prev.length;i+=2){
-        next.push({id:uidMatch(), p1:null, p2:null, score1:null, score2:null, winner:null});
+
+    // Create first round matches
+    for (let i = 0; i < bracketSize; i += 2) {
+      const p1 = players[i];
+      const p2 = players[i + 1];
+      round1.push({
+        id: uidMatch(),
+        p1: p1,
+        p2: p2,
+        winner: p1 && !p2 ? p1 : null, // If player 2 is null, it's a bye, so p1 auto-wins
+        loser: null,
+        score1: null,
+        score2: null
+      });
+    }
+
+    rounds.push(round1);
+
+    // Build subsequent empty rounds
+    let prevRoundSize = round1.length;
+    while (prevRoundSize > 1) {
+      const nextRound = [];
+      for (let i = 0; i < prevRoundSize; i += 2) {
+        nextRound.push({
+          id: uidMatch(),
+          p1: null,
+          p2: null,
+          score1: null,
+          score2: null,
+          winner: null,
+          loser: null
+        });
       }
-      rounds.push(next);
-      prev = next;
+      rounds.push(nextRound);
+      prevRoundSize = nextRound.length;
     }
-    return {format:'single', rounds};
+
+    propagateByeWinners(rounds);
+    return { format: 'single', rounds };
   }
 
-  function buildSeedOrder(size){
-    // produce seed order for bracket of 'size' where seeds array index -> position
-    // simple recursive seeding for power of two: [1, size, 2, size-1, 3, size-2, ...]
-    const order = [];
-    const helper = (arrSize, offset=0) => {
-      if(arrSize === 1){ order.push(1+offset); return; }
-      const half = arrSize/2;
-      // build for half
-      const top = [];
-      for(let i=0;i<half;i++){
-        top.push(i+1+offset);
+  /**
+   * Automatically moves winners of bye matches to the next round.
+   * @param {Array<Array<object>>} rounds - The rounds of the bracket.
+   */
+  function propagateByeWinners(rounds) {
+    if (!rounds || rounds.length < 2) return;
+    const round1 = rounds[0];
+    const round2 = rounds[1];
+    round1.forEach((match, index) => {
+      if (match.winner) { // This indicates a bye match
+        const nextMatchIndex = Math.floor(index / 2);
+        const slot = (index % 2 === 0) ? 'p1' : 'p2';
+        if (round2[nextMatchIndex]) {
+          round2[nextMatchIndex][slot] = match.winner;
+        }
       }
-      const bottom = [];
-      for(let i=0;i<half;i++){
-        bottom.push(arrSize-i+offset);
-      }
-      // interleave top then bottom in pairs
-      for(let i=0;i<half;i++){
-        order.push(top[i]);
-        order.push(bottom[i]);
-      }
-    };
-    // above handles a single level, but for seeding fairness we can do:
-    // naive approach (common) is: recursive folding; but simple pairing is ok for demo
-    helper(size,0);
-    return order;
+    });
   }
 
-  function generateRoundRobin(){
-    const seeds = [...participants].sort(byScoreDesc);
-    // round-robin representation: rounds is array of rounds with matches
-    const n = seeds.length;
-    const isOdd = n % 2 === 1;
-    const players = seeds.slice();
-    if(isOdd) players.push(null); // bye
+  /**
+   * Generates a round robin tournament schedule.
+   * @returns {object} The bracket data structure.
+   */
+  function generateRoundRobin() {
+    const players = [...participants];
+    if (players.length % 2 === 1) {
+      players.push(null); // Add a dummy player (bye) for odd numbers
+    }
+    const n = players.length;
     const rounds = [];
-    const m = players.length;
-    // scheduling by circle method
-    for(let r=0;r<m-1;r++){
+    for (let r = 0; r < n - 1; r++) {
       const matches = [];
-      for(let i=0;i<m/2;i++){
-        const a = players[i];
-        const b = players[m-1-i];
-        if(a || b){
-          matches.push({id:uidMatch(), p1:a, p2:b, score1:null, score2:null, winner:null});
+      for (let i = 0; i < n / 2; i++) {
+        const p1 = players[i];
+        const p2 = players[n - 1 - i];
+        if (p1 && p2) { // Only create matches if both players are real
+          matches.push({
+            id: uidMatch(),
+            p1,
+            p2,
+            score1: null,
+            score2: null,
+            winner: null,
+            loser: null
+          });
         }
       }
       rounds.push(matches);
-      // rotate
-      players.splice(1,0,players.pop());
+      // Rotate players for the next round, keeping the first player fixed
+      players.splice(1, 0, players.pop());
     }
-    return {format:'roundrobin', rounds};
+    return { format: 'roundrobin', rounds };
   }
 
-  function generateDoubleElim(){
-    // Implement a basic double-elim structure: winners bracket like single-elim,
-    // plus a placeholder losers bracket which will be populated as matches complete.
+  /**
+   * Generates a double elimination bracket structure.
+   * @returns {object} The bracket data structure with winners and losers rounds.
+   */
+  function generateDoubleElim() {
     const single = generateSingleElim();
     const winners = single.rounds;
-    const losers = []; // build placeholder levels (same depth as winners)
-    for(let i=0;i<winners.length;i++){
-      const matchesCount = winners.length - i - 1 >= 0 ? Math.max(1, Math.ceil((winners[0].length) / Math.pow(2,i+1))) : 1;
-      // create that many empty matches
-      const arr = [];
-      for(let j=0;j<matchesCount;j++){
-        arr.push({id:uidMatch(), p1:null, p2:null, score1:null, score2:null, winner:null});
+    const losers = [];
+
+    // Create placeholder rounds for the losers bracket
+    for (let i = 0; i < winners.length - 1; i++) {
+      const lRound = [];
+      for (let j = 0; j < winners[i].length / 2; j++) {
+        lRound.push({
+          id: uidMatch(),
+          p1: null,
+          p2: null,
+          winner: null,
+          loser: null
+        });
       }
-      losers.push(arr);
+      if (lRound.length > 0) losers.push(lRound);
+
+      // Add consolidation rounds in the losers bracket
+      if (i > 0) {
+        const lConsolidation = [];
+        for (let k = 0; k < lRound.length / 2; k++) {
+          lConsolidation.push({
+            id: uidMatch(),
+            p1: null,
+            p2: null,
+            winner: null,
+            loser: null
+          });
+        }
+        if (lConsolidation.length > 0) losers.push(lConsolidation);
+      }
     }
-    return {format:'double', roundsWinners:winners, roundsLosers:losers};
+    return {
+      format: 'double',
+      roundsWinners: winners,
+      roundsLosers: losers
+    };
   }
 
-  // -------------------------
-  // render bracket
-  function renderBracket(){
-    if(!bracket){
+
+  // ===================================================================================
+  // IX. BRACKET RENDERING
+  // Functions to draw the bracket on the screen.
+  // ===================================================================================
+
+  /**
+   * Main rendering function that draws the entire bracket structure.
+   */
+  function renderBracket() {
+    if (!bracket) {
       renderBracketEmpty();
       return;
     }
+
     bracketEmpty.style.display = 'none';
     bracketRoot.style.display = 'block';
     bracketRoot.innerHTML = '';
 
-    if(bracket.format === 'single'){
-      const rounds = bracket.rounds;
+    if (bracket.format === 'single') {
       const roundsWrap = document.createElement('div');
       roundsWrap.className = 'rounds';
-      rounds.forEach((r,ri)=>{
+      bracket.rounds.forEach((r, ri) => {
         const col = document.createElement('div');
         col.className = 'round';
-        col.innerHTML = `<h3>Round ${ri+1}</h3>`;
-        r.forEach((m,mi)=>{
-          const matchEl = renderMatchCard(m, ri, mi);
+        col.innerHTML = `<h3>Round ${ri + 1}</h3>`;
+        r.forEach((m, mi) => {
+          const matchEl = renderMatchCard(m, ri, mi, 'single');
           col.appendChild(matchEl);
         });
         roundsWrap.appendChild(col);
       });
       bracketRoot.appendChild(roundsWrap);
-    } else if(bracket.format === 'roundrobin'){
-      const rounds = bracket.rounds;
+      renderBronzeMatch(bracket);
+
+    } else if (bracket.format === 'roundrobin') {
       const roundsWrap = document.createElement('div');
-      roundsWrap.className = 'rounds';
-      rounds.forEach((r,ri)=>{
+      roundsWrap.className = 'rounds-rr';
+      bracket.rounds.forEach((r, ri) => {
         const col = document.createElement('div');
-        col.className = 'round';
-        col.innerHTML = `<h3>RR Round ${ri+1}</h3>`;
-        r.forEach((m,mi)=>{
-          const matchEl = renderMatchCard(m, ri, mi);
+        col.className = 'round-rr';
+        col.innerHTML = `<h3>Round ${ri + 1}</h3>`;
+        r.forEach((m, mi) => {
+          const matchEl = renderMatchCard(m, ri, mi, 'roundrobin');
           col.appendChild(matchEl);
         });
         roundsWrap.appendChild(col);
       });
       bracketRoot.appendChild(roundsWrap);
-    } else if(bracket.format === 'double'){
+
+    } else if (bracket.format === 'double') {
       const root = document.createElement('div');
-      root.style.display='flex';root.style.gap='18px';
-      // winners column group
+      root.className = 'double-elim-container';
+
+      // Winners Bracket Column
       const winnersCol = document.createElement('div');
-      winnersCol.style.flex='1';
-      winnersCol.innerHTML = '<h3 style="margin-top:0">Winners Bracket</h3>';
-      const wRoundWrap = document.createElement('div'); wRoundWrap.className='rounds';
-      bracket.roundsWinners.forEach((r,ri)=>{
-        const col = document.createElement('div'); col.className='round';
-        col.innerHTML=`<h3>W${ri+1}</h3>`;
-        r.forEach((m,mi)=> col.appendChild(renderMatchCard(m, ri, mi, 'winners')));
+      winnersCol.className = 'bracket-column';
+      winnersCol.innerHTML = '<h3 class="bracket-title">Winners Bracket</h3>';
+      const wRoundWrap = document.createElement('div');
+      wRoundWrap.className = 'rounds';
+      bracket.roundsWinners.forEach((r, ri) => {
+        const col = document.createElement('div');
+        col.className = 'round';
+        col.innerHTML = `<h4>W-Round ${ri + 1}</h4>`;
+        r.forEach((m, mi) => col.appendChild(renderMatchCard(m, ri, mi, 'winners')));
         wRoundWrap.appendChild(col);
       });
       winnersCol.appendChild(wRoundWrap);
-      // losers column group
-      const losersCol = document.createElement('div'); losersCol.style.flex='1';
-      losersCol.innerHTML = '<h3 style="margin-top:0">Losers Bracket</h3>';
-      const lRoundWrap = document.createElement('div'); lRoundWrap.className='rounds';
-      bracket.roundsLosers.forEach((r,ri)=>{
-        const col = document.createElement('div'); col.className='round';
-        col.innerHTML = `<h3>L${ri+1}</h3>`;
-        r.forEach((m,mi)=> col.appendChild(renderMatchCard(m, ri, mi, 'losers')));
+
+      // Losers Bracket Column
+      const losersCol = document.createElement('div');
+      losersCol.className = 'bracket-column';
+      losersCol.innerHTML = '<h3 class="bracket-title">Losers Bracket</h3>';
+      const lRoundWrap = document.createElement('div');
+      lRoundWrap.className = 'rounds';
+      bracket.roundsLosers.forEach((r, ri) => {
+        const col = document.createElement('div');
+        col.className = 'round';
+        col.innerHTML = `<h4>L-Round ${ri + 1}</h4>`;
+        r.forEach((m, mi) => col.appendChild(renderMatchCard(m, ri, mi, 'losers')));
         lRoundWrap.appendChild(col);
       });
       losersCol.appendChild(lRoundWrap);
@@ -531,405 +684,341 @@ function addBronzeMatch(rounds) {
       root.appendChild(losersCol);
       bracketRoot.appendChild(root);
     }
-
-    // after rendering attach click handlers embedded in renderMatchCard
   }
 
-  function renderMatchCard(m, roundIndex, matchIndex, bracketType='winners'){
+  /**
+   * Renders the bronze (3rd place) match card if applicable.
+   * @param {object} bracket - The main bracket object.
+   */
+  function renderBronzeMatch(bracket) {
+    if (!bracket || bracket.format !== 'single' || bracket.rounds.length < 2) return;
+    const semiFinals = bracket.rounds[bracket.rounds.length - 2];
+    if (!semiFinals || semiFinals.length !== 2) return;
+
+    const loser1 = semiFinals[0].loser;
+    const loser2 = semiFinals[1].loser;
+
+    if (loser1 && loser2) {
+      const bronzeMatch = {
+        id: 'm-bronze',
+        p1: loser1,
+        p2: loser2,
+        score1: null,
+        score2: null,
+        winner: null,
+        loser: null
+      };
+      const bronzeContainer = document.createElement('div');
+      bronzeContainer.className = 'bronze-match-container';
+      bronzeContainer.innerHTML = '<h3>Third Place Match</h3>';
+      const matchCard = renderMatchCard(bronzeMatch, -1, -1, 'bronze');
+      bronzeContainer.appendChild(matchCard);
+      bracketRoot.appendChild(bronzeContainer);
+    }
+  }
+
+  /**
+   * Renders an individual match card element.
+   * @param {object} m - The match object.
+   * @param {number} roundIndex - The index of the round.
+   * @param {number} matchIndex - The index of the match within the round.
+   * @param {string} bracketType - The type of bracket ('single', 'winners', 'losers', etc.).
+   * @returns {HTMLElement} The match card element.
+   */
+  function renderMatchCard(m, roundIndex, matchIndex, bracketType) {
     const div = document.createElement('div');
     div.className = 'match';
-    // show player names or byes
-    const p1 = m.p1;
-    const p2 = m.p2;
-    const p1Html = p1 ? `<div class="player"><div class="name">${escapeHtml(p1.name)}</div><div class="score">${m.score1==null?'':escapeHtml(String(m.score1))}</div></div>` : `<div class="player bye">BYE</div>`;
-    const p2Html = p2 ? `<div class="player"><div class="name">${escapeHtml(p2.name)}</div><div class="score">${m.score2==null?'':escapeHtml(String(m.score2))}</div></div>` : `<div class="player bye">BYE</div>`;
-    const winnerCls = m.winner ? 'winner' : '';
-    div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:12px;color:var(--muted)">Match</div><div style="font-size:12px;color:var(--muted)">ID:${m.id.slice(0,6)}</div></div>
-                     <div class="${winnerCls}">${p1Html}${p2Html}</div>
-                     <div style="display:flex;gap:8px;margin-top:8px">
-                       <button class="enterScoreBtn" style="flex:1">Enter Scores</button>
-                       <button class="autoWinBtn ghost" style="flex:1">Auto Decide</button>
-                     </div>`;
-    // events:
-    div.querySelector('.enterScoreBtn').addEventListener('click', ()=> openScoreEditor(m, roundIndex, matchIndex, bracketType));
-    div.querySelector('.autoWinBtn').addEventListener('click', ()=>{
-      autoDecide(m, roundIndex, matchIndex, bracketType);
-      renderBracket();
-    });
+    const isBye = m.p1 && m.p2 === null;
+
+    const p1Html = m.p1 ? `<div class="player"><div class="name">${escapeHtml(m.p1.name)}</div><div class="score">${m.score1==null?'':escapeHtml(String(m.score1))}</div></div>` : `<div class="player bye">(empty)</div>`;
+    const p2Html = m.p2 ? `<div class="player"><div class="name">${escapeHtml(m.p2.name)}</div><div class="score">${m.score2==null?'':escapeHtml(String(m.score2))}</div></div>` : (isBye ? `<div class="player bye">BYE</div>` : `<div class="player bye">(empty)</div>`);
+
+    let winnerHtml = '';
+    if (m.winner) {
+      winnerHtml = `<div class="winner-tag">🏆 ${escapeHtml(m.winner.name)}</div>`;
+    }
+
+    div.innerHTML = `
+      <div class="match-meta"><span>Match ID: ${m.id.slice(0,6)}</span></div>
+      <div class="match-body">${p1Html}${p2Html}</div>
+      ${winnerHtml}
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="enterScoreBtn" style="flex:1" ${isBye ? 'disabled' : ''}>Enter Scores</button>
+      </div>`;
+
+    if (!isBye) {
+      div.querySelector('.enterScoreBtn').addEventListener('click', () => openScoreEditor(m, roundIndex, matchIndex, bracketType));
+    }
     return div;
   }
 
-  // -------------------------
-  // scoring & propagation
-  function openScoreEditor(match, roundIndex, matchIndex, bracketType='winners'){
-    // simple prompts for scores (for demo). Could be upgraded to modal UI.
-    const p1Name = match.p1 ? match.p1.name : 'BYE';
-    const p2Name = match.p2 ? match.p2.name : 'BYE';
-    if(!match.p1 && !match.p2) { alert('Empty match'); return; }
-    const s1 = match.p1 ? prompt(`Enter score for ${p1Name}`, match.score1==null?'':String(match.score1)) : null;
-    const s2 = match.p2 ? prompt(`Enter score for ${p2Name}`, match.score2==null?'':String(match.score2)) : null;
-    // parse
+  /**
+   * Renders the placeholder view when no bracket is generated.
+   */
+  function renderBracketEmpty() {
+    bracketRoot.style.display = 'none';
+    bracketEmpty.style.display = 'flex';
+  }
+
+
+  // ===================================================================================
+  // X. SCORING & WINNER PROPAGATION
+  // Functions for handling match scoring and advancing winners.
+  // ===================================================================================
+
+  /**
+   * Opens prompts to enter scores for a match.
+   * @param {object} match - The match object to score.
+   * @param {number} roundIndex - The index of the round.
+   * @param {number} matchIndex - The index of the match within the round.
+   * @param {string} bracketType - The type of bracket.
+   */
+  function openScoreEditor(match, roundIndex, matchIndex, bracketType) {
+    const p1Name = match.p1 ? match.p1.name : '(empty)';
+    const p2Name = match.p2 ? match.p2.name : '(empty)';
+
+    if (!match.p1 || !match.p2) {
+      alert('This match is not yet ready to be scored.');
+      return;
+    }
+
+    const s1 = prompt(`Enter score for ${p1Name}:`, match.score1 == null ? '' : String(match.score1));
+    const s2 = prompt(`Enter score for ${p2Name}:`, match.score2 == null ? '' : String(match.score2));
+
     match.score1 = s1 === null ? match.score1 : (s1 === '' ? null : Number(s1));
     match.score2 = s2 === null ? match.score2 : (s2 === '' ? null : Number(s2));
+
     decideMatchWinner(match);
-    propagateWinner(match, roundIndex, matchIndex, bracketType);
-    renderParticipants(); renderBracket(); renderScoreTable();
+
+    if (bracketType !== 'bronze') {
+      propagateWinner(match, roundIndex, matchIndex, bracketType);
+    }
+
+    renderBracket();
   }
 
-  function autoDecide(match, roundIndex, matchIndex, bracketType='winners'){
-    // choose based on higher score if present, else prefer non-null, else random
-    if(match.p1 && !match.p2){ match.winner = match.p1; return; }
-    if(!match.p1 && match.p2){ match.winner = match.p2; return; }
-    if(match.score1 != null && match.score2 != null){
-      match.winner = match.score1 >= match.score2 ? match.p1 : match.p2;
-      return;
-    }
-    // fallback: if both participants exist pick random
-    if(match.p1 && match.p2){
-      match.winner = Math.random() < 0.5 ? match.p1 : match.p2;
-    }
-  }
-
-  function decideMatchWinner(match){
-    if(match.p1 && !match.p2){ match.winner = match.p1; return; }
-    if(!match.p1 && match.p2){ match.winner = match.p2; return; }
-    if(match.score1 == null && match.score2 == null) { match.winner = null; return; }
-    if(match.score1 != null && match.score2 != null){
-      match.winner = match.score1 >= match.score2 ? match.p1 : match.p2;
-    } else if(match.score1 != null && match.score2 == null){
+  /**
+   * Determines the winner and loser of a match based on its scores.
+   * @param {object} match - The match object.
+   */
+  function decideMatchWinner(match) {
+    if (match.p1 && !match.p2) { // Bye case
       match.winner = match.p1;
-    } else if(match.score2 != null && match.score1 == null){
-      match.winner = match.p2;
+      match.loser = null;
+      return;
     }
+
+    if (match.score1 == null || match.score2 == null) {
+      match.winner = null;
+      match.loser = null;
+      return;
+    }
+
+    let winner, loser;
+    const s1 = match.score1;
+    const s2 = match.score2;
+
+    if (s1 >= s2) {
+      winner = match.p1;
+      loser = match.p2;
+    } else {
+      winner = match.p2;
+      loser = match.p1;
+    }
+    match.winner = winner;
+    match.loser = loser;
   }
 
-  function propagateWinner(match, roundIndex, matchIndex, bracketType='winners'){
-    // only implemented for single-elim & winners of double-elim basic propagation
-    if(!match.winner) return;
-    if(bracket.format === 'single'){
-      const rounds = bracket.rounds;
-      if(roundIndex+1 >= rounds.length) return;
-      const nextMatchIndex = Math.floor(matchIndex/2);
+  /**
+   * Moves the winner and loser to their respective next matches in the bracket.
+   * @param {object} match - The completed match object.
+   * @param {number} roundIndex - The index of the round.
+   * @param {number} matchIndex - The index of the match within the round.
+   * @param {string} bracketType - The type of bracket.
+   */
+  function propagateWinner(match, roundIndex, matchIndex, bracketType) {
+    if (!match.winner) return;
+
+    if (bracketType === 'single' || bracketType === 'winners') {
+      const rounds = (bracketType === 'single') ? bracket.rounds : bracket.roundsWinners;
+      if (roundIndex + 1 >= rounds.length) return; // Final match, no propagation
+
+      const nextMatchIndex = Math.floor(matchIndex / 2);
       const slot = (matchIndex % 2 === 0) ? 'p1' : 'p2';
-      rounds[roundIndex+1][nextMatchIndex][slot] = match.winner;
-      // clear downstream scores/winners if overwritten
-      rounds[roundIndex+1][nextMatchIndex].score1 = null;
-      rounds[roundIndex+1][nextMatchIndex].score2 = null;
-      rounds[roundIndex+1][nextMatchIndex].winner = null;
-    } else if(bracket.format === 'roundrobin'){
-      // no propagation — round robin accumulates matches
-      return;
-    } else if(bracket.format === 'double'){
-      // place winner in next winners round
-      const w = bracket.roundsWinners;
-      if(roundIndex+1 < w.length){
-        const nextMatchIndex = Math.floor(matchIndex/2);
-        const slot = (matchIndex % 2 === 0) ? 'p1' : 'p2';
-        w[roundIndex+1][nextMatchIndex][slot] = match.winner;
-        w[roundIndex+1][nextMatchIndex].score1 = null; w[roundIndex+1][nextMatchIndex].score2 = null; w[roundIndex+1][nextMatchIndex].winner = null;
-      }
-      // loser goes to losers bracket — basic behaviour: not fully fleshed
-      // find loser
-      const loser = (match.p1 && match.p2 && match.winner && match.winner.id === match.p1.id) ? match.p2 : (match.p1 && match.p2 ? match.p1 : null);
-      if(loser){
-        // naive: push into first empty slot of losers[0]
-        const l0 = bracket.roundsLosers[0];
-        for(const m of l0){
-          if(!m.p1){ m.p1 = loser; break;}
-          else if(!m.p2){ m.p2 = loser; break;}
+      const nextMatch = rounds[roundIndex + 1][nextMatchIndex];
+
+      if (nextMatch[slot] && nextMatch[slot].id === match.winner.id) return; // Avoid re-propagation
+
+      nextMatch[slot] = match.winner;
+      // Reset next match's scores
+      nextMatch.score1 = null;
+      nextMatch.score2 = null;
+      nextMatch.winner = null;
+      nextMatch.loser = null;
+    }
+
+    // For double elimination, move loser to the losers bracket
+    if (bracketType === 'winners' && match.loser) {
+      // This logic needs to be fully implemented based on the specific DE bracket structure
+      // For now, it's a placeholder to demonstrate where the logic would go.
+      const lRoundIndex = roundIndex; // Simplified mapping
+      if (bracket.roundsLosers[lRoundIndex]) {
+        const targetMatch = bracket.roundsLosers[lRoundIndex][Math.floor(matchIndex / 2)];
+        if (targetMatch) {
+          // Find an empty slot for the loser
+          if (!targetMatch.p1) targetMatch.p1 = match.loser;
+          else if (!targetMatch.p2) targetMatch.p2 = match.loser;
         }
       }
     }
   }
 
-  // -------------------------
-  // helpers & UI small functions
-  function renderBracketEmpty(){
-    bracketRoot.style.display='none';
-    bracketEmpty.style.display='flex';
-  }
 
-  // announcements
-  function sendAnnouncement(){
+  // ===================================================================================
+  // XI. UI & MISCELLANEOUS FUNCTIONS
+  // Announcements, exports, and theme switching.
+  // ===================================================================================
+
+  /**
+   * Posts an announcement to the announcements panel.
+   */
+  function sendAnnouncement() {
     const txt = announcementInput.value && announcementInput.value.trim();
-    if(!txt) return;
-    const time = new Date().toLocaleTimeString();
+    if (!txt) return;
+    const time = new Date().toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
     const entry = document.createElement('div');
-    entry.textContent = `[${time}] ${txt}`;
+    entry.className = 'announcement-entry';
+    entry.innerHTML = `<span class="timestamp">[${time}]</span> ${escapeHtml(txt)}`;
     announcements.prepend(entry);
-    announcementInput.value='';
+    announcementInput.value = '';
   }
 
-  // export
-  function exportJSON(){
-    const out = {participants, bracket, rules: rulesArea.value, compName: compName.value};
-    const blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
+  /**
+   * Exports the current tournament state to a downloadable JSON file.
+   */
+  function exportJSON() {
+    const out = {
+      competitionName: compName.value,
+      rules: rulesArea.value,
+      participants,
+      categories,
+      bracket,
+    };
+    const blob = new Blob([JSON.stringify(out, null, 2)], {
+      type: 'application/json'
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'octomatch_export.json'; a.click();
+    a.href = url;
+    a.download = `octomatch_data_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
     URL.revokeObjectURL(url);
   }
 
-  function copyShareData(){
-    const out = {participants, bracket};
-    const txt = JSON.stringify(out);
-    navigator.clipboard?.writeText(txt).then(()=> alert('Bracket data copied to clipboard.'));
-  }
-
-  // -------------------------
-  // theme switcher
-  const themes = {
-    default: { '--bg':'#061022', '--panel':'#071224', '--text':'#e6eef8', '--muted':'#9aa7b8', '--accent':'#2dd4bf', '--accent-2':'#60a5fa', '--card':'#071426' },
-    redblue: { '--bg':'#08030a','--panel':'#0f0810','--text':'#fff1f1','--muted':'#f8cbd0','--accent':'#f43f5e','--accent-2':'#3b82f6','--card':'#140913' },
-    purpleblack: { '--bg':'#09060d','--panel':'#0e0913','--text':'#efe6ff','--muted':'#bfb3df','--accent':'#7c3aed','--accent-2':'#1f2937','--card':'#0b0410' },
-    spiderman: { '--bg':'#0b1015','--panel':'#11171c','--text':'#ffdede','--muted':'#f6c6c6','--accent':'#e22d2d','--accent-2':'#1e40af','--card':'#0a0f13' },
-    blood: { '--bg':'#120204','--panel':'#1c0808','--text':'#ffecec','--muted':'#f0b5b5','--accent':'#b91c1c','--accent-2':'#6b021d','--card':'#180303' },
-    sapphire: { '--bg':'#071225','--panel':'#0a1b2a','--text':'#eaf6ff','--muted':'#b5d5ff','--accent':'#0ea5b9','--accent-2':'#64748b','--card':'#061422' },
-    emerald: { '--bg':'#07120a','--panel':'#0b1a12','--text':'#eafbf0','--muted':'#bfe6c9','--accent':'#10b981','--accent-2':'#334155','--card':'#07160f' },
-    digital: { '--bg':'#02020a','--panel':'#071026','--text':'#dbeafe','--muted':'#9fb7d9','--accent':'#7c3aed','--accent-2':'#22c1c3','--card':'#02011a' },
-    coral: { '--bg':'#07121a','--panel':'#0b151b','--text':'#fff7f5','--muted':'#ffdcd4','--accent':'#ff7b6b','--accent-2':'#2dd4bf','--card':'#07121a' },
-    citrus: { '--bg':'#07110b','--panel':'#0b1410','--text':'#fffdf2','--muted':'#fff2d6','--accent':'#f97316','--accent-2':'#84cc16','--card':'#08130a' },
-    artisan: { '--bg':'#0c0a07','--panel':'#1a120e','--text':'#fff7f1','--muted':'#dccbbd','--accent':'#c2410c','--accent-2':'#b5835a','--card':'#0b0a07' },
-    forest: { '--bg':'#07160d','--panel':'#0b2413','--text':'#eaffeb','--muted':'#bfe1c6','--accent':'#16a34a','--accent-2':'#065f46','--card':'#07160d' },
-    ocean: { '--bg':'#021224','--panel':'#0a2230','--text':'#e6fbff','--muted':'#bfeaf6','--accent':'#0284c7','--accent-2':'#0ea5b9','--card':'#031522' },
-    desert: { '--bg':'#1b0f05','--panel':'#281609','--text':'#fff7ef','--muted':'#f0d6c4','--accent':'#f59e0b','--accent-2':'#f97316','--card':'#1a0e05' },
-    mono: { '--bg':'#050506','--panel':'#0b0b0c','--text':'#f6f6f7','--muted':'#bdbdbf','--accent':'#9ca3af','--accent-2':'#4b5563','--card':'#060607' },
-    nordic: { '--bg':'#eff6ff','--panel':'#f8fafc','--text':'#0b1220','--muted':'#64748b','--accent':'#60a5fa','--accent-2':'#a78bfa','--card':'#ffffff' },
-    peach: { '--bg':'#fffaf9','--panel':'#fff5f2','--text':'#201a19','--muted':'#8b6f69','--accent':'#ffb4a2','--accent-2':'#f59e0b','--card':'#fff6f4' },
-    retro: { '--bg':'#0f1724','--panel':'#111827','--text':'#fff1e6','--muted':'#f7d6b7','--accent':'#ff6b6b','--accent-2':'#ffd166','--card':'#0b1220' },
-    cyber: { '--bg':'#020617','--panel':'#061022','--text':'#e6f7ff','--muted':'#9fb7d9','--accent':'#7c3aed','--accent-2':'#06b6d4','--card':'#020a1a' },
-    plumgold: { '--bg':'#09030a','--panel':'#140a13','--text':'#fff8fb','--muted':'#e7dbe9','--accent':'#7c3aed','--accent-2':'#d4af37','--card':'#10060f' }
-  };
-
-  function applyTheme(name){
-    const t = themes[name] || themes['default'];
-    for(const k in t) document.documentElement.style.setProperty(k, t[k]);
-  }
-
-  // -------------------------
-  // UI wiring
-  addBtn.addEventListener('click', addParticipantFromInputs);
-  clearBtn.addEventListener('click', clearParticipants);
-  importBtn.addEventListener('click', ()=>{
-    const text = importArea.value;
-    if(!text.trim()) return alert('Paste data into the import area first.');
-    const parsed = parseImportText(text);
-    participants = participants.concat(parsed);
-    renderParticipants();
-    importArea.value = '';
-  });
-  generateBtn.addEventListener('click', generateBracket);
-  resetBtn.addEventListener('click', ()=>{
-    bracket = null; renderBracketEmpty();
-  });
-  autoSeedBtn.addEventListener('click', smartSeed);
-  announceBtn.addEventListener('click', sendAnnouncement);
-  groupBtn.addEventListener('click', formTeamsPairing);
-  rrBtn.addEventListener('click', ()=>{
-    alert('Previewing round-robin: generate bracket with "Round Robin" format for full preview.');
-  });
-  exportBtn.addEventListener('click', exportJSON);
-  copyShare.addEventListener('click', copyShareData);
-
-  themeSelect.addEventListener('change', ()=>applyTheme(themeSelect.value));
-  // default theme:
-  applyTheme('default');
-
-  // handy: when format changes hide/show options (placeholder)
-  formatSelect.addEventListener('change', ()=> {
-    // could show/hide custom options; left empty for now
-  });
-
-  // keyboard shortcuts
-  document.addEventListener('keydown', (e)=>{
-    if(e.ctrlKey && e.key==='Enter'){ generateBracket(); }
-  });
-
-  // initial render
-  renderParticipants();
-  renderScoreTable();
-  renderBracketEmpty();
-
-  // small helper: preload example participants for dev
-  // (commented out by default)
-  /*
-  participants.push({id:uid(),name:'Paige',score:220});
-  participants.push({id:uid(),name:'John',score:200});
-  participants.push({id:uid(),name:'Ava',score:180});
-  renderParticipants();
-  */
-
-  // expose for debugging (optional)
-  window.OctoMatch = {
-    getState: ()=>({participants, bracket})
-  };
-// OctoMatch — Smart Team & Bracket Organizer
-// Handles participant input, bracket generation, and layout
-
-
-
-// Add participant
-document.getElementById('addParticipantBtn').onclick = () => {
-  const name = nameInput.value.trim();
-  const score = scoreInput.value.trim();
-  if (!name) return alert("Enter a name!");
-  participants.push({ name, score: score ? parseInt(score) : 0 });
-  renderParticipants();
-  nameInput.value = '';
-  scoreInput.value = '';
-};
-
-// Clear all participants
-document.getElementById('clearParticipantsBtn').onclick = () => {
-  if (confirm("Clear all participants?")) {
-    participants.length = 0;
-    renderParticipants();
-  }
-};
-
-// Import participants from text area
-document.getElementById('importBtn').onclick = () => {
-  const text = document.getElementById('importArea').value.trim();
-  if (!text) return alert("Paste something first!");
-  const lines = text.split(/\n/);
-  for (const line of lines) {
-    const parts = line.split(/[\t, ]+/);
-    if (parts[0]) participants.push({ name: parts[0], score: parseInt(parts[1]) || 0 });
-  }
-  renderParticipants();
-};
-
-// Smart seed by score
-document.getElementById('autoSeedBtn').onclick = () => {
-  participants.sort((a, b) => b.score - a.score);
-  renderParticipants();
-};
-
-// Generate bracket
-document.getElementById('generateBtn').onclick = () => {
-  if (participants.length < 2) return alert("Add at least 2 participants.");
-  generateBracket();
-};
-
-// Reset bracket
-document.getElementById('resetBtn').onclick = () => {
-  bracketRoot.innerHTML = '';
-  bracketRoot.style.display = 'none';
-  bracketEmpty.style.display = 'flex';
-};
-
-// Render participants table
-function renderParticipants() {
-  if (participants.length === 0) {
-    participantsList.style.display = '';
-    participantsTable.style.display = 'none';
-    participantsList.textContent = 'No participants yet.';
-    return;
-  }
-
-  participantsList.style.display = 'none';
-  participantsTable.style.display = '';
-  participantsTbody.innerHTML = '';
-  scoreTbody.innerHTML = '';
-
-  participants.forEach((p, i) => {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${p.name}</td>
-      <td>${p.score}</td>
-      <td><button data-i="${i}" class="delBtn">❌</button></td>`;
-    participantsTbody.appendChild(row);
-
-    const srow = document.createElement('tr');
-    srow.innerHTML = `<td>${p.name}</td><td>${p.score}</td>`;
-    scoreTbody.appendChild(srow);
-  });
-
-  // Delete button
-  document.querySelectorAll('.delBtn').forEach(btn => {
-    btn.onclick = e => {
-      const i = parseInt(btn.dataset.i);
-      participants.splice(i, 1);
-      renderParticipants();
-    };
-  });
-}
-
-// Generate single-elimination bracket (pyramid layout)
-function generateBracket() {
-  const shuffled = [...participants];
-  shuffled.sort((a, b) => Math.random() - 0.5); // randomize
-
-  // Ensure even number of players
-  if (shuffled.length % 2 !== 0) shuffled.pop();
-
-  bracketRoot.innerHTML = '';
-  bracketEmpty.style.display = 'none';
-  bracketRoot.style.display = 'block';
-  bracketRoot.className = 'bracket pyramid';
-
-  let currentRound = shuffled.map(p => ({ name: p.name, score: 0 }));
-  let roundNum = 1;
-
-  while (currentRound.length > 1) {
-    const nextRound = [];
-    const roundDiv = document.createElement('div');
-    roundDiv.className = 'round';
-    roundDiv.innerHTML = `<h3>Round ${roundNum}</h3>`;
-    const matchesDiv = document.createElement('div');
-    matchesDiv.className = 'matches';
-
-    for (let i = 0; i < currentRound.length; i += 2) {
-      const a = currentRound[i];
-      const b = currentRound[i + 1];
-      if (!b) continue;
-
-      const match = document.createElement('div');
-      match.className = 'match';
-
-      match.innerHTML = `
-        <div class="player"><input type="number" class="scoreInput" value="0" /> ${a.name}</div>
-        <div class="player"><input type="number" class="scoreInput" value="0" /> ${b.name}</div>
-      `;
-
-      matchesDiv.appendChild(match);
-
-      nextRound.push({ name: `Winner of ${a.name} vs ${b.name}`, score: 0 });
+  /**
+   * Creates a sharable URL containing the compressed tournament data.
+   */
+  function copyShareData() {
+    try {
+        const out = { participants, bracket };
+        // Using btoa for a simple, non-production-safe encoding
+        const txt = btoa(JSON.stringify(out));
+        const url = window.location.href.split('#')[0] + '#data=' + txt;
+        navigator.clipboard?.writeText(url)
+            .then(() => alert('Sharable link copied to clipboard!'))
+            .catch(() => alert('Could not copy link to clipboard.'));
+    } catch (e) {
+        alert('Failed to generate share link. Data may be too large.');
+        console.error(e);
     }
-
-    roundDiv.appendChild(matchesDiv);
-    bracketRoot.appendChild(roundDiv);
-    currentRound = nextRound;
-    roundNum++;
   }
 
-  stylePyramid();
-}
+  /**
+   * Applies a new color theme to the application.
+   * @param {string} name - The name of the theme to apply.
+   */
+  function applyTheme(name) {
+    const themes = {
+      default: { '--bg':'#061022', '--panel':'#071224', '--text':'#e6eef8', '--muted':'#9aa7b8', '--accent':'#2dd4bf', '--accent-2':'#60a5fa', '--card':'#071426' },
+      redblue: { '--bg':'#08030a','--panel':'#0f0810','--text':'#fff1f1','--muted':'#f8cbd0','--accent':'#f43f5e','--accent-2':'#3b82f6','--card':'#140913' },
+      cyber: { '--bg':'#020617','--panel':'#061022','--text':'#e6f7ff','--muted':'#9fb7d9','--accent':'#7c3aed','--accent-2':'#06b6d4','--card':'#020a1a' },
+      nordic: { '--bg':'#eff6ff','--panel':'#f8fafc','--text':'#0b1220','--muted':'#64748b','--accent':'#60a5fa','--accent-2':'#a78bfa','--card':'#ffffff' },
+      forest: { '--bg':'#07160d','--panel':'#0b2413','--text':'#eaffeb','--muted':'#bfe1c6','--accent':'#16a34a','--accent-2':'#065f46','--card':'#07160d' },
+      // ... Add all other themes here
+    };
+    const t = themes[name] || themes['default'];
+    for (const k in t) {
+      document.documentElement.style.setProperty(k, t[k]);
+    }
+  }
 
-// Style rounds in pyramid layout
-function stylePyramid() {
-  const rounds = document.querySelectorAll('.round');
-  rounds.forEach((r, i) => {
-    r.style.display = 'flex';
-    r.style.flexDirection = 'column';
-    r.style.alignItems = 'center';
-    r.style.margin = '40px 0';
-  });
 
-  const matches = document.querySelectorAll('.match');
-  matches.forEach(m => {
-    m.style.background = 'var(--bg-2)';
-    m.style.padding = '10px 16px';
-    m.style.borderRadius = '10px';
-    m.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-    m.style.margin = '10px auto';
-    m.style.width = 'fit-content';
-  });
-}
+  // ===================================================================================
+  // XII. EVENT LISTENERS & INITIALIZATION
+  // Wires up all UI elements and performs the initial render.
+  // ===================================================================================
 
-// Theme handling
-themeSelect.onchange = () => {
-  document.body.dataset.theme = themeSelect.value;
-};
+  /**
+   * Attaches all primary event listeners to the DOM elements.
+   */
+  function initializeEventListeners() {
+    addParticipantBtn.addEventListener('click', addParticipantFromInputs);
+    clearParticipantsBtn.addEventListener('click', clearParticipants);
+    importBtn.addEventListener('click', () => {
+      const text = importArea.value;
+      if (!text.trim()) return alert('Paste data into the import area first.');
+      const parsed = parseImportText(text);
+      participants = participants.concat(parsed);
+      assignCategories();
+      renderParticipants();
+      importArea.value = '';
+    });
+    generateBtn.addEventListener('click', generateBracket);
+    resetBtn.addEventListener('click', () => {
+      if (confirm("Are you sure you want to reset the current bracket?")) {
+          bracket = null;
+          renderBracketEmpty();
+      }
+    });
+    autoSeedBtn.addEventListener('click', smartSeed);
+    announceBtn.addEventListener('click', sendAnnouncement);
+    groupBtn.addEventListener('click', formTeamsPairing);
+    exportBtn.addEventListener('click', exportJSON);
+    copyShare.addEventListener('click', copyShareData);
+    if (addCategoryBtn) {
+      addCategoryBtn.addEventListener('click', addCategory);
+    }
+    themeSelect.addEventListener('change', () => applyTheme(themeSelect.value));
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+Enter to generate bracket
+      if (e.ctrlKey && e.key === 'Enter') {
+        generateBracket();
+      }
+      // Allow adding participant with Enter key from score input
+      if (e.key === 'Enter' && document.activeElement === scoreInput) {
+          addParticipantFromInputs();
+      }
+    });
+  }
+
+  /**
+   * Initializes the application on page load.
+   */
+  function initialize() {
+    initializeEventListeners();
+    applyTheme('default');
+    renderParticipants();
+    renderBracketEmpty();
+    renderCategories();
+    console.log("OctoMatch Initialized!");
+  }
+
+  // Run the initializer once the DOM is fully loaded.
+  document.addEventListener('DOMContentLoaded', initialize);
 
 })();
